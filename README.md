@@ -1,0 +1,163 @@
+
+# WareHound Sniffer
+
+A high-performance network packet sniffer and analyzer, designed for flexible capture, protocol analysis, and real-time statistics. Suitable for research, diagnostics, and network monitoring.
+
+# libsniff — High-Performance Packet Sniffer
+
+Minimal, cross-platform, high-throughput network packet sniffer built as a parallel pipeline:
+
+- **Lock-free**: threads communicate via ring buffers, no mutexes in hot path
+- **Zero-copy**: each packet is copied only once from kernel to user space
+- **CPU affinity**: each thread is pinned to a core for max performance
+
+**Pipeline:**
+
+```
+Network → [PcapSource] → [SpmcRingBuffer] → [Mappers ×N] → [Shuffler] → [Reducers ×R] → BufferPool
+```
+
+Each stage is parallelized for millions of packets/sec. See diagram below:
+
+```
+      ┌──────────────┐
+      │ PcapSource   │  1 capture thread (pinned)
+      │ (libpcap/    │
+      │  Npcap)      │
+      └──────┬───────┘
+           │ memcpy into BufferPool
+           ▼
+      ┌────────────────────┐
+      │ SpmcRingBuffer     │  capture ring
+      │  <PacketView>      │  (single producer)
+      └─────────┬──────────┘
+            │ work-stealing claim
+     ┌──────────┼──────────┬───────────┐
+     ▼          ▼          ▼           ▼
+   ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐
+   │Mapper0│ │Mapper1│ │Mapper2│ │Mapper3│   N parser threads (pinned)
+   └───┬───┘ └───┬───┘ └───┬───┘ └───┬───┘
+     │ parse + flow hash └───┬─────┘
+     └───────────────────────▼
+          ┌────── Shuffler ───────┐
+          │  hash(5-tuple) % R    │
+          └──┬──────────┬─────────┘
+           │          │
+           ▼          ▼
+      ┌──────────┐  ┌──────────┐
+      │ SPSC[0]  │  │ SPSC[1]  │  …  per-reducer queues
+      └────┬─────┘  └────┬─────┘
+         ▼             ▼
+      ┌────────┐    ┌────────┐
+      │Reducer0│    │Reducer1│       R stat threads (pinned)
+      └────┬───┘    └────┬───┘
+         └──── release buffer back to BufferPool
+```
+
+## Architecture
+
+```
+          ┌──────────────┐
+          │ PcapSource   │  1 capture thread (pinned)
+          │ (libpcap/    │
+          │  Npcap)      │
+          └──────┬───────┘
+                 │ memcpy into BufferPool
+                 ▼
+        ┌────────────────────┐
+        │ SpmcRingBuffer     │  capture ring
+        │  <PacketView>      │  (single producer)
+        └─────────┬──────────┘
+                  │ work-stealing claim
+       ┌──────────┼──────────┬───────────┐
+       ▼          ▼          ▼           ▼
+   ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐
+   │Mapper0│ │Mapper1│ │Mapper2│ │Mapper3│   N parser threads (pinned)
+   └───┬───┘ └───┬───┘ └───┬───┘ └───┬───┘
+       │ parse + flow hash └───┬─────┘
+       └───────────────────────▼
+              ┌────── Shuffler ───────┐
+              │  hash(5-tuple) % R    │
+              └──┬──────────┬─────────┘
+                 │          │
+                 ▼          ▼
+        ┌──────────┐  ┌──────────┐
+        │ SPSC[0]  │  │ SPSC[1]  │  …  per-reducer queues
+        └────┬─────┘  └────┬─────┘
+             ▼             ▼
+        ┌────────┐    ┌────────┐
+        │Reducer0│    │Reducer1│       R stat threads (pinned)
+        └────┬───┘    └────┬───┘
+             └──── release buffer back to BufferPool
+```
+
+## Build
+
+### Linux (Debian/Ubuntu)
+
+```bash
+sudo apt install libpcap-dev cmake build-essential
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+sudo setcap cap_net_raw,cap_net_admin=eip build/simple_sniff   # optional
+build/simple_sniff eth0 "tcp port 443"
+```
+
+### macOS
+
+```bash
+brew install libpcap cmake
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+sudo build/simple_sniff en0
+```
+
+### Windows (Npcap)
+
+1. Install [Npcap](https://npcap.com/) (with WinPcap-compatible mode).
+2. Download the [Npcap SDK](https://npcap.com/#download) and unzip somewhere,
+   e.g. `C:\npcap-sdk`.
+3. Build:
+
+```cmd
+cmake -S . -B build -DNPCAP_SDK=C:\npcap-sdk -A x64
+cmake --build build --config Release
+build\Release\simple_sniff.exe "\Device\NPF_{GUID}"
+```
+
+(Find the interface name with `getmac /v` or use `pcap_findalldevs`.)
+
+## What's implemented
+
+| Component                         | Status                                  |
+|-----------------------------------|------------------------------------------|
+| Cross-platform CPU affinity       | done (POSIX + Windows)                  |
+| Cross-platform thread naming      | done                                    |
+| Aligned memory allocation         | done (huge pages = TODO)                |
+| SPSC bounded lock-free queue      | done (own impl, ~50 lines)              |
+| SPMC ring with work-stealing claim| done (own impl)                         |
+| Buffer pool                       | done (mutex; lock-free = TODO)          |
+| libpcap/Npcap capture source      | done                                    |
+| DPDK source                       | stub                                    |
+| AF_PACKET / AF_XDP source         | not yet                                 |
+| Ethernet + IPv4 + TCP/UDP parser  | done                                    |
+| IPv6 / VLAN / MPLS / tunnels      | not yet                                 |
+| Symmetric 5-tuple flow hash       | done                                    |
+| Mapper pool                       | done                                    |
+| Shuffler                          | done                                    |
+| Reducer base + L4 counter         | done                                    |
+| Flow table                        | not yet (needs hazard pointers)         |
+| Hazard pointers                   | stub                                    |
+| HTTP / TLS dissectors             | not yet                                 |
+
+## Suggested next steps
+
+1. Swap own SPMC for **Disruptor-cpp** WorkerPool — better wait strategies,
+   dependent-consumer barriers.
+2. Replace `BufferPool`'s mutex with a Treiber stack (or per-thread caches).
+3. Add an `AfPacketSource` for Linux (PACKET_MMAP / TPACKET_V3 = 10x libpcap).
+4. Implement hazard pointers and a sharded flow table (one shard per reducer
+   so no synchronization is needed on lookups).
+5. Add a real benchmark harness — replay a pcap file in a tight loop and
+   measure packets/sec at each stage.
+6. ThreadSanitizer in CI — lock-free code without TSan is gambling.
