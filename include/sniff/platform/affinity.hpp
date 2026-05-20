@@ -1,5 +1,3 @@
-// libsniff/platform/affinity.hpp
-// Cross-platform CPU affinity and thread tuning.
 #pragma once
 
 #include <cstdint>

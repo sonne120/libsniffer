@@ -1,24 +1,4 @@
-// libsniff/sniff.hpp
-// Public facade. Full pipeline:
-//
-//   PcapSource (1 thread, pinned)
-//        │  memcpy into BufferPool slot
-//        ▼
-//   SpmcRingBuffer<PacketView>     (capture ring)
-//        │  work-stealing claim (CAS)
-//        ▼
-//   MapperPool (N threads, pinned)  — parse + Shuffler.offer(my_id, pv)
-//        │
-//        ▼
-//   Shuffler matrix: SpscQueue<PacketView>[M][R]
-//        │
-//        ▼
-//   Reducer threads (R threads, pinned)  — Shuffler.poll(my_id)
-//        │  release(pv.data)
-//        ▼
-//   BufferPool  (recycled for next captured frame)
 #pragma once
-
 #include "sniff/capture/pcap_source.hpp"
 #include "sniff/core/mempool.hpp"
 #include "sniff/core/ring_buffer.hpp"
@@ -209,4 +189,4 @@ private:
     std::atomic<uint64_t> capture_drops_{0};
 };
 
-} // namespace sniff
+} 

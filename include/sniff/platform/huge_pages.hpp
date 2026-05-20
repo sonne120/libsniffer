@@ -1,5 +1,4 @@
 #pragma once
-
 #include <cstddef>
 #include <cstdlib>
 #include <new>
@@ -26,4 +25,4 @@ inline void aligned_free_bytes(void* p) noexcept {
 #endif
 }
 
-} // namespace sniff::platform
+} 
