@@ -3,56 +3,6 @@
 
 A high-performance network packet sniffer and analyzer, designed for flexible capture, protocol analysis, and real-time statistics. Suitable for research, diagnostics, and network monitoring.
 
-# libsniff — High-Performance Packet Sniffer
-
-Minimal, cross-platform, high-throughput network packet sniffer built as a parallel pipeline:
-
-- **Lock-free**: threads communicate via ring buffers, no mutexes in hot path
-- **Zero-copy**: each packet is copied only once from kernel to user space
-- **CPU affinity**: each thread is pinned to a core for max performance
-
-**Pipeline:**
-
-```
-Network → [PcapSource] → [SpmcRingBuffer] → [Mappers ×N] → [Shuffler] → [Reducers ×R] → BufferPool
-```
-
-Each stage is parallelized for millions of packets/sec. See diagram below:
-
-```
-      ┌──────────────┐
-      │ PcapSource   │  1 capture thread (pinned)
-      │ (libpcap/    │
-      │  Npcap)      │
-      └──────┬───────┘
-           │ memcpy into BufferPool
-           ▼
-      ┌────────────────────┐
-      │ SpmcRingBuffer     │  capture ring
-      │  <PacketView>      │  (single producer)
-      └─────────┬──────────┘
-            │ work-stealing claim
-     ┌──────────┼──────────┬───────────┐
-     ▼          ▼          ▼           ▼
-   ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐
-   │Mapper0│ │Mapper1│ │Mapper2│ │Mapper3│   N parser threads (pinned)
-   └───┬───┘ └───┬───┘ └───┬───┘ └───┬───┘
-     │ parse + flow hash └───┬─────┘
-     └───────────────────────▼
-          ┌────── Shuffler ───────┐
-          │  hash(5-tuple) % R    │
-          └──┬──────────┬─────────┘
-           │          │
-           ▼          ▼
-      ┌──────────┐  ┌──────────┐
-      │ SPSC[0]  │  │ SPSC[1]  │  …  per-reducer queues
-      └────┬─────┘  └────┬─────┘
-         ▼             ▼
-      ┌────────┐    ┌────────┐
-      │Reducer0│    │Reducer1│       R stat threads (pinned)
-      └────┬───┘    └────┬───┘
-         └──── release buffer back to BufferPool
-```
 
 ## Architecture
 
@@ -127,28 +77,6 @@ build\Release\simple_sniff.exe "\Device\NPF_{GUID}"
 
 (Find the interface name with `getmac /v` or use `pcap_findalldevs`.)
 
-## What's implemented
-
-| Component                         | Status                                  |
-|-----------------------------------|------------------------------------------|
-| Cross-platform CPU affinity       | done (POSIX + Windows)                  |
-| Cross-platform thread naming      | done                                    |
-| Aligned memory allocation         | done (huge pages = TODO)                |
-| SPSC bounded lock-free queue      | done (own impl, ~50 lines)              |
-| SPMC ring with work-stealing claim| done (own impl)                         |
-| Buffer pool                       | done (mutex; lock-free = TODO)          |
-| libpcap/Npcap capture source      | done                                    |
-| DPDK source                       | stub                                    |
-| AF_PACKET / AF_XDP source         | not yet                                 |
-| Ethernet + IPv4 + TCP/UDP parser  | done                                    |
-| IPv6 / VLAN / MPLS / tunnels      | not yet                                 |
-| Symmetric 5-tuple flow hash       | done                                    |
-| Mapper pool                       | done                                    |
-| Shuffler                          | done                                    |
-| Reducer base + L4 counter         | done                                    |
-| Flow table                        | not yet (needs hazard pointers)         |
-| Hazard pointers                   | stub                                    |
-| HTTP / TLS dissectors             | not yet                                 |
 
 ## Suggested next steps
 

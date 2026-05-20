@@ -74,7 +74,6 @@ else()
     endif()
 endif()
 
-# ---- The library ----
 add_library(WareHound.Sniffer SHARED
     src/capture/device_scanner.cpp
     src/pcap_source.cpp
@@ -83,7 +82,6 @@ add_library(WareHound.Sniffer SHARED
     src/api/statistic_exports.cpp
 )
 
-# Set output name based on platform
 if(APPLE)
     set_target_properties(WareHound.Sniffer PROPERTIES
         OUTPUT_NAME "WareHound.Sniffer"
@@ -134,11 +132,9 @@ else()
     endif()
 endif()
 
-# Threads
 find_package(Threads REQUIRED)
 target_link_libraries(WareHound.Sniffer PUBLIC Threads::Threads)
 
-# ---- Example executable ----
 add_executable(simple_sniff examples/simple_sniff.cpp)
 target_link_libraries(simple_sniff PRIVATE WareHound.Sniffer)
 set_target_properties(simple_sniff PROPERTIES
