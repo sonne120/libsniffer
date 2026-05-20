@@ -1,8 +1,7 @@
 
-# WareHound Sniffer
+# Libsniffer
 
 A high-performance network packet sniffer and analyzer, designed for flexible capture, protocol analysis, and real-time statistics. Suitable for research, diagnostics, and network monitoring.
-
 
 ## Architecture
 
@@ -78,14 +77,3 @@ build\Release\simple_sniff.exe "\Device\NPF_{GUID}"
 (Find the interface name with `getmac /v` or use `pcap_findalldevs`.)
 
 
-## Suggested next steps
-
-1. Swap own SPMC for **Disruptor-cpp** WorkerPool — better wait strategies,
-   dependent-consumer barriers.
-2. Replace `BufferPool`'s mutex with a Treiber stack (or per-thread caches).
-3. Add an `AfPacketSource` for Linux (PACKET_MMAP / TPACKET_V3 = 10x libpcap).
-4. Implement hazard pointers and a sharded flow table (one shard per reducer
-   so no synchronization is needed on lookups).
-5. Add a real benchmark harness — replay a pcap file in a tight loop and
-   measure packets/sec at each stage.
-6. ThreadSanitizer in CI — lock-free code without TSan is gambling.
