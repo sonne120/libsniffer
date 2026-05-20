@@ -40,6 +40,19 @@ A high-performance network packet sniffer and analyzer, designed for flexible ca
              └──── release buffer back to BufferPool
 ```
 
+## Components
+
+| Component | Source | Function |
+|---|---|---|
+| **BufferPool** | [include/sniff/core/mempool.hpp](include/sniff/core/mempool.hpp) | Pre-allocated pool of fixed-size, cache-aligned buffers. `acquire()`/`release()` hand out slots without calling `malloc`/`free` on the hot path. |
+| **PcapSource** | [include/sniff/capture/pcap_source.hpp](include/sniff/capture/pcap_source.hpp), [src/pcap_source.cpp](src/pcap_source.cpp) | Wraps libpcap/Npcap. Opens the NIC, applies an optional BPF filter in the kernel, and delivers `RawPacket{data, length, timestamp_ns}` to a user callback. |
+| **SpmcRingBuffer** | [include/sniff/core/ring_buffer.hpp](include/sniff/core/ring_buffer.hpp) | Single-producer/multi-consumer ring (LMAX Disruptor style). Capture thread publishes `PacketView`s; mappers steal work via atomic CAS — no mutex. |
+| **MapperPool** | [include/sniff/pipeline/mapper_pool.hpp](include/sniff/pipeline/mapper_pool.hpp) | Runs N parser threads. Each pulls a packet from the capture ring, parses Ethernet + IPv4, computes the 5-tuple `FlowKey`, and hands it to the Shuffler. |
+| **Shuffler** | [include/sniff/pipeline/shuffler.hpp](include/sniff/pipeline/shuffler.hpp) | M×R matrix of SPSC queues. `hash(flow) % R` deterministically routes every packet of a flow to the same reducer (no cross-thread contention on flow state). |
+| **SpscQueue** | [include/sniff/core/spsc_queue.hpp](include/sniff/core/spsc_queue.hpp) | Lock-free single-producer/single-consumer queue used inside the Shuffler matrix. Only acquire/release stores — ~3–5× faster than the SPMC ring. |
+| **Reducer** | [include/sniff/pipeline/reducer.hpp](include/sniff/pipeline/reducer.hpp) | Terminal stage. Polls its column of SPSC queues round-robin, runs `on_packet()` (e.g. `L4CounterReducer` updates per-protocol counters), then returns the buffer to the pool. |
+| **Pipeline** | [include/sniff/sniff.hpp](include/sniff/sniff.hpp) | Façade that wires everything together: owns the pool, capture ring, mappers, shuffler, and reducers; starts/stops threads with CPU affinity; exposes `stats()`. |
+
 ## Build
 
 ### Linux (Debian/Ubuntu)
