@@ -1,9 +1,9 @@
-[![Downloads](https://img.shields.io/github/downloads/sonne120/libsniffer/total)](https://github.com/sonne120/libsniffer/releases)
-[![Latest](https://img.shields.io/github/downloads/sonne120/libsniffer/latest/total)](https://github.com/sonne120/libsniffer/releases/latest)
-
+![C++](https://img.shields.io/badge/C%2B%2B-00599C)
 ![Language](https://img.shields.io/github/languages/top/sonne120/libsniffer)
 ![Stars](https://img.shields.io/github/stars/sonne120/libsniffer)
+![Forks](https://img.shields.io/github/forks/sonne120/libsniffer)
 ![Last commit](https://img.shields.io/github/last-commit/sonne120/libsniffer)
+![Repo size](https://img.shields.io/github/repo-size/sonne120/libsniffer)
 
 # Libsniffer
 
